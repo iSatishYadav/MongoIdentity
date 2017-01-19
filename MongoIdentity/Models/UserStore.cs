@@ -8,7 +8,7 @@ using Microsoft.AspNet.Identity;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Builders;
-
+using System.Security.Authentication;
 
 namespace MongoIdentity.Models
 {/// <summary>
@@ -36,52 +36,39 @@ namespace MongoIdentity.Models
         /// </summary>
         private const string collectionName = "AspNetUsers";
 
-        /// <summary>
-        ///     Gets the database from connection string.
-        /// </summary>
-        /// <param name="connectionString">The connection string.</param>
-        /// <returns>MongoDatabase.</returns>
-        /// <exception cref="System.Exception">No database name specified in connection string</exception>
-        private MongoDatabase GetDatabaseFromSqlStyle(string connectionString)
-        {
-            var conString = new MongoConnectionStringBuilder(connectionString);
-            MongoClientSettings settings = MongoClientSettings.FromConnectionStringBuilder(conString);
-            MongoServer server = new MongoClient(settings).GetServer();
-            if (conString.DatabaseName == null)
-            {
-                throw new Exception("No database name specified in connection string");
-            }
-            return server.GetDatabase(conString.DatabaseName);
-        }
 
         /// <summary>
         ///     Gets the database from URL.
         /// </summary>
-        /// <param name="url">The URL.</param>
+        /// <param name="connectionNameOrUrl">The URL.</param>
         /// <returns>MongoDatabase.</returns>
-        private MongoDatabase GetDatabaseFromUrl(MongoUrl url)
+        private MongoDatabase GetDatabaseFromUrl(string connectionNameOrUrl)
         {
-            var client = new MongoClient(url);
-            MongoServer server = client.GetServer();
+            var url = new MongoUrl(connectionNameOrUrl);
+            MongoClientSettings settings = MongoClientSettings.FromUrl(url);
+            settings.SslSettings =
+              new SslSettings() { EnabledSslProtocols = SslProtocols.Tls12 };
+            var mongoClient = new MongoClient(settings);
+            MongoServer server = mongoClient.GetServer();
             if (url.DatabaseName == null)
             {
-                throw new Exception("No database name specified in connection string");
+                throw new ArgumentException("No database name specified in connection string");
             }
             return server.GetDatabase(url.DatabaseName); // WriteConcern defaulted to Acknowledged
         }
 
-        /// <summary>
-        ///     Uses connectionString to connect to server and then uses databae name specified.
-        /// </summary>
-        /// <param name="connectionString">The connection string.</param>
-        /// <param name="dbName">Name of the database.</param>
-        /// <returns>MongoDatabase.</returns>
-        private MongoDatabase GetDatabase(string connectionString, string dbName)
-        {
-            var client = new MongoClient(connectionString);
-            MongoServer server = client.GetServer();
-            return server.GetDatabase(dbName);
-        }
+        ///// <summary>
+        /////     Uses connectionString to connect to server and then uses databae name specified.
+        ///// </summary>
+        ///// <param name="connectionString">The connection string.</param>
+        ///// <param name="dbName">Name of the database.</param>
+        ///// <returns>MongoDatabase.</returns>
+        //private MongoDatabase GetDatabase(string connectionString, string dbName)
+        //{
+        //    var client = new MongoClient(connectionString);
+        //    MongoServer server = client.GetServer();
+        //    return server.GetDatabase(dbName);
+        //}
 
         #endregion
 
@@ -102,73 +89,43 @@ namespace MongoIdentity.Models
         /// <param name="connectionNameOrUrl">The connection name or URL.</param>
         public UserStore(string connectionNameOrUrl)
         {
+            connectionNameOrUrl = ConfigurationManager.ConnectionStrings[connectionNameOrUrl].ConnectionString;
             if (connectionNameOrUrl.ToLower().StartsWith("mongodb://"))
             {
-                db = GetDatabaseFromUrl(new MongoUrl(connectionNameOrUrl));
-            }
-            else
-            {
-                string connStringFromManager =
-                    ConfigurationManager.ConnectionStrings[connectionNameOrUrl].ConnectionString;
-                if (connStringFromManager.ToLower().StartsWith("mongodb://"))
-                {
-                    db = GetDatabaseFromUrl(new MongoUrl(connStringFromManager));
-                }
-                else
-                {
-                    db = GetDatabaseFromSqlStyle(connStringFromManager);
-                }
-            }
+                db = GetDatabaseFromUrl(connectionNameOrUrl);
+            }          
         }
 
-        /// <summary>
-        ///     Initializes a new instance of the <see cref="UserStore{TUser}" /> class. Uses name from ConfigurationManager or a
-        ///     mongodb:// Url.
-        ///     Database can be specified separately from connection server.
-        /// </summary>
-        /// <param name="connectionNameOrUrl">The connection name or URL.</param>
-        /// <param name="dbName">Name of the database.</param>
-        public UserStore(string connectionNameOrUrl, string dbName)
-        {
-            if (connectionNameOrUrl.ToLower().StartsWith("mongodb://"))
-            {
-                db = GetDatabase(connectionNameOrUrl, dbName);
-            }
-            else
-            {
-                db = GetDatabase(ConfigurationManager.ConnectionStrings[connectionNameOrUrl].ConnectionString, dbName);
-            }
-        }
+        ///// <summary>
+        /////     Initializes a new instance of the <see cref="UserStore{TUser}" /> class. Uses name from ConfigurationManager or a
+        /////     mongodb:// Url.
+        /////     Database can be specified separately from connection server.
+        ///// </summary>
+        ///// <param name="connectionNameOrUrl">The connection name or URL.</param>
+        ///// <param name="dbName">Name of the database.</param>
+        //public UserStore(string connectionNameOrUrl, string dbName)
+        //{
+        //    if (connectionNameOrUrl.ToLower().StartsWith("mongodb://"))
+        //    {
+        //        db = GetDatabase(connectionNameOrUrl, dbName);
+        //    }
+        //    else
+        //    {
+        //        db = GetDatabase(ConfigurationManager.ConnectionStrings[connectionNameOrUrl].ConnectionString, dbName);
+        //    }
+        //}
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="UserStore{TUser}"/> class using a already initialized Mongo Database.
-        /// </summary>
-        /// <param name="mongoDatabase">The mongo database.</param>
-        public UserStore(MongoDatabase mongoDatabase)
-        {
-            db = mongoDatabase;
-        }
+        ///// <summary>
+        ///// Initializes a new instance of the <see cref="UserStore{TUser}"/> class using a already initialized Mongo Database.
+        ///// </summary>
+        ///// <param name="mongoDatabase">The mongo database.</param>
+        //public UserStore(MongoDatabase mongoDatabase)
+        //{
+        //    db = mongoDatabase;
+        //}
 
 
-        /// <summary>
-        ///     Initializes a new instance of the <see cref="UserStore{TUser}" /> class.
-        /// </summary>
-        /// <param name="connectionName">Name of the connection from ConfigurationManager.ConnectionStrings[].</param>
-        /// <param name="useMongoUrlFormat">if set to <c>true</c> [use mongo URL format].</param>
-        [Obsolete("Use UserStore(connectionNameOrUrl)")]
-        public UserStore(string connectionName, bool useMongoUrlFormat)
-        {
-            string connectionString = ConfigurationManager.ConnectionStrings[connectionName].ConnectionString;
-            if (useMongoUrlFormat)
-            {
-                var url = new MongoUrl(connectionString);
-                db = GetDatabaseFromUrl(url);
-            }
-            else
-            {
-                db = GetDatabaseFromSqlStyle(connectionString);
-            }
-        }
+ 
 
         #endregion
 
