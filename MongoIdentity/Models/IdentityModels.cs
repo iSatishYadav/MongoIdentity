@@ -2,7 +2,8 @@
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNet.Identity;
-using Microsoft.AspNet.Identity.EntityFramework;
+
+using System;
 
 namespace MongoIdentity.Models
 {
@@ -18,16 +19,16 @@ namespace MongoIdentity.Models
         }
     }
 
-    public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
+    public class ApplicationDbContext : IDisposable
     {
-        public ApplicationDbContext()
-            : base("DefaultConnection", throwIfV1Schema: false)
-        {
-        }
-
         public static ApplicationDbContext Create()
         {
             return new ApplicationDbContext();
         }
+
+        public void Dispose()
+        {
+        }
     }
+
 }
